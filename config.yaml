@@ -1,0 +1,6 @@
+text_color: "#ffffffff"
+background_color: "#00000070"
+text_size: 70
+default_size: !Struct { x: 600.0, y: 100.0 }
+passthrough: true
+lyric_dir: "/home/misaka/Temp/Music/"

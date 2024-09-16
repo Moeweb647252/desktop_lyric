@@ -5,13 +5,13 @@ use serde::{Deserialize, Serialize};
 
 mod lyric;
 mod serve;
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 struct Vec2 {
     x: f32,
     y: f32,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 struct Config {
     text_color: String,
     background_color: String,
@@ -52,15 +52,17 @@ fn main() -> eframe::Result {
     eframe::run_native(
         "Desktop Lyric", // unused title
         options,
-        Box::new(|_cc| {
+        Box::new(|cc| {
+            setup_custom_fonts(&cc.egui_ctx);
             Ok(Box::new(MyApp {
-                current_lyric: Arc::new(RwLock::new("".to_owned())),
+                current_lyric: serve::serve(config.clone()),
                 text_color: HexColor::from_str(&config.text_color.leak())
                     .unwrap()
                     .color(),
                 background_color: HexColor::from_str(&config.background_color.leak())
                     .unwrap()
                     .color(),
+                text_size: config.text_size,
             }))
         }),
     )
@@ -71,6 +73,7 @@ struct MyApp {
     current_lyric: Arc<RwLock<String>>,
     text_color: Color32,
     background_color: Color32,
+    text_size: f32,
 }
 
 impl eframe::App for MyApp {
@@ -86,9 +89,44 @@ impl eframe::App for MyApp {
             })
             .show(ctx, |ui| {
                 ui.heading(
-                    RichText::new(self.current_lyric.read().as_str()).color(self.text_color),
+                    RichText::new(self.current_lyric.read().as_str())
+                        .color(self.text_color)
+                        .size(self.text_size),
                 );
+                std::thread::sleep(std::time::Duration::from_millis(1000 / 50));
+                ctx.request_repaint();
             })
             .response;
     }
+}
+
+fn setup_custom_fonts(ctx: &egui::Context) {
+    // Start with the default fonts (we will be adding to them rather than replacing them).
+    let mut fonts = egui::FontDefinitions::default();
+
+    // Install my own font (maybe supporting non-latin characters).
+    // .ttf and .otf files supported.
+    fonts.font_data.insert(
+        "my_font".to_owned(),
+        egui::FontData::from_static(include_bytes!(
+            "/usr/share/fonts/wenquanyi/wqy-zenhei/wqy-zenhei.ttc"
+        )),
+    );
+
+    // Put my font first (highest priority) for proportional text:
+    fonts
+        .families
+        .entry(egui::FontFamily::Proportional)
+        .or_default()
+        .insert(0, "my_font".to_owned());
+
+    // Put my font as last fallback for monospace:
+    fonts
+        .families
+        .entry(egui::FontFamily::Monospace)
+        .or_default()
+        .push("my_font".to_owned());
+
+    // Tell egui to use these fonts:
+    ctx.set_fonts(fonts);
 }
