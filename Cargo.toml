@@ -1,0 +1,13 @@
+[package]
+name = "desktop_lyric"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+amll-lyric = "0.1.1"
+eframe = { version = "0.28.1", features = ["default", "wgpu"] }
+egui = "0.28.1"
+env_logger = "0.11.5"
+mpris = "2.0.1"
+serde = { version = "1.0.210", features = ["derive"] }
+serde_yaml = "0.9.34"
