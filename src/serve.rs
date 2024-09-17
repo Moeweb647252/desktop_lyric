@@ -1,11 +1,15 @@
+use std::ffi::OsStr;
 use std::fs::read_to_string;
+use std::path::PathBuf;
 use std::{sync::Arc, thread};
 
 use crate::lyric::Lyric;
 use crate::Config;
 use eframe::egui::mutex::RwLock;
+use eframe::egui::TextBuffer;
 use log::info;
-use mpris::PlayerFinder;
+use mpris::{Metadata, PlayerFinder};
+use simsearch::SimSearch;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
@@ -37,101 +41,100 @@ macro_rules! unwarp_or_continue {
 pub fn serve(config: Config) -> Arc<RwLock<String>> {
     let _lock = Arc::new(RwLock::new("No lyric".to_owned()));
     let lock = _lock.clone();
-    thread::spawn(move || {
-        'dbus: loop {
-            let finder = unwarp_or_continue!(PlayerFinder::new(), 'dbus);
-            'player: loop {
-                let player = unwarp_or_continue!(finder.find_active(), 'player);
-                let metadata = unwarp_or_continue!(player.get_metadata(), 'player);
-                println!("{:?}", metadata);
-                let lrc_file = if let Some(url) = metadata.url() {
-                    std::fs::read_dir(&config.lyric_dir)
-                        .unwrap()
-                        .map(|v| v.unwrap())
-                        .map(|v| (v.file_name().to_string_lossy().to_string(), v))
-                        .filter(|v| v.0.ends_with(".lrc"))
-                        .find(|v| {
-                            v.0.contains(
-                                url.to_string()
-                                    .replace("file://", "")
-                                    .split('.')
-                                    .collect::<Vec<&str>>()[0]
-                                    .split('/')
-                                    .collect::<Vec<&str>>()
-                                    .last()
-                                    .unwrap(),
-                            )
-                        })
-                } else {
-                    None
-                };
-                let lrc = if let Some(lrc_file) = lrc_file {
-                    Lyric::from_str(&read_to_string(&lrc_file.1.path()).unwrap())
-                } else {
-                    if let Some(title) = metadata.title() {
-                        let artist = if let Some(artists) = metadata.artists() {
-                            if let Some(artist) = artists.first() {
-                                artist.to_owned()
-                            } else {
-                                ""
-                            }
-                        } else {
-                            ""
-                        };
-                        let resp = Err("fetch lyric not implemented");
-                        match resp {
-                            Ok(lyrics) => Lyric::from_str(lyrics),
-                            Err(e) => {
-                                log::error!("Error: {}", e);
-                                Lyric::from_str("")
-                            }
-                        }
-                    } else {
-                        Lyric::from_str("")
+    thread::spawn(move || 'dbus: loop {
+        let finder = unwarp_or_continue!(PlayerFinder::new(), 'dbus);
+        'player: loop {
+            let player = unwarp_or_continue!(finder.find_active(), 'player);
+            let metadata = unwarp_or_continue!(player.get_metadata(), 'player);
+            println!("{:?}", metadata);
+            let lrc = find_lyric(&metadata, &config.lyric_dir);
+            dbg!(&lrc);
+            let mut count = 0;
+            let mut position = unwarp_or_continue!(player.get_position(), 'player);
+            let mut instant = Instant::now();
+            loop {
+                if count > 50 {
+                    let new_metadata = unwarp_or_continue!(player.get_metadata(), 'player);
+                    if new_metadata.title() != metadata.title()
+                        && new_metadata.artists() != metadata.artists()
+                    {
+                        info!("Song changed: {:?}", new_metadata.title());
+                        continue 'player;
                     }
-                };
-                dbg!(&lrc);
-                let mut count = 0;
-                let mut position = unwarp_or_continue!(player.get_position(), 'player);
-                let mut instant = Instant::now();
-                loop {
-                    if count > 50 {
-                        let new_metadata = unwarp_or_continue!(player.get_metadata(), 'player);
-                        if new_metadata.title() != metadata.title()
-                            && new_metadata.artists() != metadata.artists()
-                        {
-                            info!("Song changed: {:?}", new_metadata.title());
-                            continue 'player;
-                        }
-                        count = 0;
-                    }
-                    if count > 10 {
-                        position = unwarp_or_continue!(player.get_position(), 'player);
-                        instant = Instant::now();
-                    }
-                    let pos = (position + instant.elapsed()).as_millis() as u64;
-                    let line = lrc
-                        .lines
-                        .iter()
-                        .filter(|v| v.begin <= pos)
-                        .map(|v| v.content.to_owned())
-                        .collect::<Vec<String>>();
-                    if let Some(line) = line.last() {
-                        {
-                            if count % 10 == 0 {
-                                //dbg!(pos);
-                                //dbg!(line);
-                            }
-                            if !line.is_empty() {
-                                (*lock.write()) = line.to_owned();
-                            }
-                        }
-                    }
-                    count += 1;
-                    sleep(Duration::from_millis(20));
+                    count = 0;
                 }
+                if count > 10 {
+                    position = unwarp_or_continue!(player.get_position(), 'player);
+                    instant = Instant::now();
+                }
+                let pos = (position + instant.elapsed()).as_millis() as u64;
+                let line = lrc
+                    .lines
+                    .iter()
+                    .filter(|v| v.begin <= pos)
+                    .map(|v| v.content.to_owned())
+                    .collect::<Vec<String>>();
+                if let Some(line) = line.last() {
+                    {
+                        if count % 10 == 0 {
+                            dbg!(pos);
+                            dbg!(line);
+                        }
+                        if !line.is_empty() {
+                            (*lock.write()) = line.to_owned();
+                        }
+                    }
+                }
+                count += 1;
+                sleep(Duration::from_millis(20));
             }
         }
     });
     _lock
+}
+
+fn find_lyric(metadata: &Metadata, lyric_dir: &str) -> Lyric {
+    if let Some(url) = metadata.url() {
+        let path = PathBuf::from(url.replace("file://", ""));
+        if let Some(Some(file_stem)) = path.file_stem().map(|v| v.to_str()) {
+            let mut engine: SimSearch<PathBuf> = SimSearch::new();
+            std::fs::read_dir(lyric_dir)
+                .unwrap()
+                .map(|v| v.unwrap())
+                .filter(|v| v.path().file_stem().is_some())
+                .filter(|v| v.path().extension() == Some(OsStr::new("lrc")))
+                .for_each(|v| {
+                    engine.insert(
+                        v.path(),
+                        v.path()
+                            .clone()
+                            .file_stem()
+                            .unwrap()
+                            .to_string_lossy()
+                            .as_str(),
+                    )
+                });
+            if let Some(path) = engine.search(file_stem).get(0) {
+                if let Ok(content) = read_to_string(path) {
+                    return Lyric::from_str(&content);
+                }
+            }
+        }
+    }
+    if let Some(title) = metadata.title() {
+        let mut artist = String::new();
+        if let Some(artists) = metadata.artists() {
+            if let Some(_artist) = artists.first() {
+                artist = _artist.to_owned().to_owned()
+            }
+        }
+        let resp = Err("fetch lyric not implemented");
+        match resp {
+            Ok(lyrics) => return Lyric::from_str(lyrics),
+            Err(e) => {
+                log::error!("Error: {}", e);
+            }
+        };
+    }
+    Lyric::from_str("")
 }

@@ -1,7 +1,12 @@
-use std::{fs::read_to_string, str::FromStr, sync::Arc};
+use std::{
+    fs::{read, read_to_string},
+    str::FromStr,
+    sync::Arc,
+};
 
 use eframe::egui::{
-    self, ecolor::HexColor, mutex::RwLock, Color32, Label, RichText, Sense, ViewportCommand,
+    self, ecolor::HexColor, mutex::RwLock, Color32, FontData, Label, Margin, RichText, Rounding,
+    Sense, ViewportCommand,
 };
 use log::info;
 use serde::{Deserialize, Serialize};
@@ -22,19 +27,7 @@ struct Config {
     default_size: Vec2,
     passthrough: bool,
     lyric_dir: String,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            text_color: "#ffffff".to_string(),
-            background_color: "#000000".to_string(),
-            text_size: 24.0,
-            default_size: Vec2 { x: 600.0, y: 100.0 },
-            passthrough: false,
-            lyric_dir: "./".to_owned(),
-        }
-    }
+    font_path: String,
 }
 
 fn main() -> eframe::Result {
@@ -56,7 +49,7 @@ fn main() -> eframe::Result {
         "Desktop Lyric", // unused title
         options,
         Box::new(|cc| {
-            setup_custom_fonts(&cc.egui_ctx);
+            setup_custom_fonts(&cc.egui_ctx, &config.font_path);
             Ok(Box::new(MyApp {
                 current_lyric: serve::serve(config.clone()),
                 text_color: HexColor::from_str(&config.text_color.leak())
@@ -66,7 +59,7 @@ fn main() -> eframe::Result {
                     .unwrap()
                     .color(),
                 text_size: config.text_size,
-                prev_lyric: "No lyric".to_owned(),
+                prev_size: (config.default_size.x, config.default_size.y),
                 drag_mode: true,
             }))
         }),
@@ -78,7 +71,7 @@ struct MyApp {
     text_color: Color32,
     background_color: Color32,
     text_size: f32,
-    prev_lyric: String,
+    prev_size: (f32, f32),
     drag_mode: bool,
 }
 
@@ -91,22 +84,25 @@ impl eframe::App for MyApp {
         let resp = egui::CentralPanel::default()
             .frame(egui::containers::Frame {
                 fill: self.background_color,
+                rounding: Rounding::same(10.0),
+                inner_margin: Margin::symmetric(10.0, 5.0),
                 ..Default::default()
             })
             .show(ctx, |ui| {
                 let cur_lyric = { self.current_lyric.read().clone() };
                 let resp = ui.add(
                     Label::new(
-                        RichText::new(&cur_lyric)
+                        RichText::new(format!("{}", &cur_lyric))
                             .color(self.text_color)
                             .size(self.text_size),
                     )
                     .extend(),
                 );
-                if cur_lyric != self.prev_lyric {
+                if self.prev_size != (resp.rect.max.x, resp.rect.max.y) {
+                    self.prev_size = (resp.rect.max.x, resp.rect.max.y);
                     ctx.send_viewport_cmd(ViewportCommand::InnerSize(egui::Vec2::new(
-                        resp.rect.max.x,
-                        resp.rect.max.y,
+                        resp.rect.max.x + 20.0,
+                        resp.rect.max.y + 10.0,
                     )));
                 }
             })
@@ -133,21 +129,39 @@ impl eframe::App for MyApp {
         std::thread::sleep(std::time::Duration::from_millis(1000 / 50));
         ctx.request_repaint();
     }
+    fn raw_input_hook(&mut self, _ctx: &egui::Context, _raw_input: &mut egui::RawInput) {
+        use egui::Event::*;
+        for i in _raw_input.events.iter() {
+            match i {
+                MouseWheel {
+                    unit,
+                    delta,
+                    modifiers,
+                } => {
+                    if delta.y > 0.0 {
+                        self.text_size += 1.0;
+                    } else if delta.y < 0.0 {
+                        self.text_size -= 1.0;
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
 }
 
-fn setup_custom_fonts(ctx: &egui::Context) {
+fn setup_custom_fonts(ctx: &egui::Context, font_path: &str) {
     // Start with the default fonts (we will be adding to them rather than replacing them).
     let mut fonts = egui::FontDefinitions::default();
-
+    let fontdata = if let Ok(font_data) = std::fs::read(font_path) {
+        // .ttf and .otf files supported.
+        FontData::from_owned(font_data)
+    } else {
+        FontData::from_static(include_bytes!("../assets/SetoFont-1.ttf"))
+    };
     // Install my own font (maybe supporting non-latin characters).
     // .ttf and .otf files supported.
-    fonts.font_data.insert(
-        "my_font".to_owned(),
-        egui::FontData::from_static(include_bytes!(
-            "/usr/share/fonts/wenquanyi/wqy-zenhei/wqy-zenhei.ttc"
-        )),
-    );
-
+    fonts.font_data.insert("my_font".to_owned(), fontdata);
     // Put my font first (highest priority) for proportional text:
     fonts
         .families
@@ -158,7 +172,7 @@ fn setup_custom_fonts(ctx: &egui::Context) {
     // Put my font as last fallback for monospace:
     fonts
         .families
-        .entry(egui::FontFamily::Monospace)
+        .entry(egui::FontFamily::Proportional)
         .or_default()
         .push("my_font".to_owned());
 

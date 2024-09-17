@@ -11,6 +11,7 @@ log = "0.4.22"
 mpris = "2.0.1"
 serde = { version = "1.0.210", features = ["derive"] }
 serde_yaml = "0.9.34"
+simsearch = "0.2.5"
 
 [profile.release]
 strip = true
