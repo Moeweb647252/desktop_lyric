@@ -84,7 +84,9 @@ pub fn serve(config: Config) -> Arc<RwLock<String>> {
                             dbg!(pos);
                             dbg!(line);
                         }
-                        (*lock.write()) = line.to_owned();
+                        if !line.is_empty() {
+                            (*lock.write()) = line.to_owned();
+                        }
                     }
                 }
                 count += 1;
