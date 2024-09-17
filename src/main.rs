@@ -1,6 +1,9 @@
 use std::{fs::read_to_string, str::FromStr, sync::Arc};
 
-use egui::{ecolor::HexColor, mutex::RwLock, Color32, RichText};
+use eframe::egui::{
+    self, ecolor::HexColor, mutex::RwLock, Color32, Label, RichText, Sense, ViewportCommand,
+};
+use log::info;
 use serde::{Deserialize, Serialize};
 
 mod lyric;
@@ -46,7 +49,7 @@ fn main() -> eframe::Result {
             .with_resizable(true)
             .with_transparent(true)
             .with_mouse_passthrough(config.passthrough),
-        renderer: eframe::Renderer::Wgpu,
+        renderer: eframe::Renderer::Glow,
         ..Default::default()
     };
     eframe::run_native(
@@ -63,17 +66,20 @@ fn main() -> eframe::Result {
                     .unwrap()
                     .color(),
                 text_size: config.text_size,
+                prev_lyric: "No lyric".to_owned(),
+                drag_mode: true,
             }))
         }),
     )
 }
 
-#[derive(Default)]
 struct MyApp {
     current_lyric: Arc<RwLock<String>>,
     text_color: Color32,
     background_color: Color32,
     text_size: f32,
+    prev_lyric: String,
+    drag_mode: bool,
 }
 
 impl eframe::App for MyApp {
@@ -82,21 +88,50 @@ impl eframe::App for MyApp {
     }
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        egui::CentralPanel::default()
+        let resp = egui::CentralPanel::default()
             .frame(egui::containers::Frame {
                 fill: self.background_color,
                 ..Default::default()
             })
             .show(ctx, |ui| {
-                ui.heading(
-                    RichText::new(self.current_lyric.read().as_str())
-                        .color(self.text_color)
-                        .size(self.text_size),
+                let cur_lyric = { self.current_lyric.read().clone() };
+                let resp = ui.add(
+                    Label::new(
+                        RichText::new(&cur_lyric)
+                            .color(self.text_color)
+                            .size(self.text_size),
+                    )
+                    .extend(),
                 );
-                std::thread::sleep(std::time::Duration::from_millis(1000 / 50));
-                ctx.request_repaint();
+                if cur_lyric != self.prev_lyric {
+                    ctx.send_viewport_cmd(ViewportCommand::InnerSize(egui::Vec2::new(
+                        resp.rect.max.x,
+                        resp.rect.max.y,
+                    )));
+                }
             })
-            .response;
+            .response
+            .interact(Sense::click_and_drag());
+        if resp.clicked_by(egui::PointerButton::Secondary) {
+            self.drag_mode = !self.drag_mode;
+            println!("Drag mode: {}", self.drag_mode)
+        }
+
+        if self.drag_mode {
+            if resp.drag_started() {
+                ctx.send_viewport_cmd(ViewportCommand::StartDrag);
+            }
+        } else {
+            if resp.dragged() {
+                if resp.drag_delta().y > 0.0 {
+                    self.text_size += 1.0;
+                } else if resp.drag_delta().y < 0.0 {
+                    self.text_size -= 1.0;
+                }
+            }
+        }
+        std::thread::sleep(std::time::Duration::from_millis(1000 / 50));
+        ctx.request_repaint();
     }
 }
 
