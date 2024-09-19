@@ -1,7 +1,10 @@
-text_color: "#ffffff10"
-background_color: "#2cbebd60"
+text_color: "#ffffff60"
+#background_color: "#2cbebd60"
+background_color: "#00000060"
 text_size: 50
-default_size: !Struct { x: 700.0, y: 70.0 }
+default_size: !Struct { x: 700.0, y: 10.0 }
 passthrough: false
 lyric_dir: "/home/misaka/Temp/Music/"
-font_path: "/home/misaka/下载/SetoFont-1.ttf"
+font_path: ""
+player_name: "deadbeef"
+fuzzy: false
