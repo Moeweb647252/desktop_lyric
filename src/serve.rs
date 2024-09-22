@@ -16,21 +16,13 @@ use std::thread::{sleep, JoinHandle};
 use std::time::{Duration, Instant};
 
 pub enum Event {
-    Stop,
     ChangePlayer(String),
     ToggleFuzzy,
 }
 
-macro_rules! unwarp_or_break {
-    ($e:expr, $t:tt) => {
-        match $e {
-            Ok(v) => v,
-            Err(e) => {
-                eprintln!("Error: {}", e);
-                break $tt;
-            }
-        }
-    };
+enum BreakLabel {
+    Player,
+    None,
 }
 
 macro_rules! unwarp_or_continue {
@@ -47,36 +39,24 @@ macro_rules! unwarp_or_continue {
 }
 
 pub fn serve(
-    config: Config,
-    mut player_name: String,
+    mut config: Config,
     event_receiver: Receiver<Event>,
-    mut fuzzy: bool,
 ) -> (JoinHandle<()>, Arc<RwLock<String>>) {
     let _lock = Arc::new(RwLock::new("No lyric".to_owned()));
     let lock = _lock.clone();
     (
-        thread::spawn(move || 'dbus: loop {
-            let finder = unwarp_or_continue!(PlayerFinder::new(), 'dbus);
+        thread::spawn(move || 'finder: loop {
+            let finder = unwarp_or_continue!(PlayerFinder::new(), 'finder);
             'player: loop {
-                if let Some(event) = event_receiver.try_recv().ok() {
-                    match event {
-                        Event::Stop => {
-                            break 'dbus;
-                        }
-                        Event::ChangePlayer(name) => {
-                            info!("Received new player name: {}", name);
-                            player_name = name;
-                            break 'player;
-                        }
-                        Event::ToggleFuzzy => {
-                            fuzzy = !fuzzy;
-                            break 'player;
-                        }
+                match handle_event(&event_receiver, &mut config) {
+                    BreakLabel::Player => {
+                        break 'player;
                     }
-                }
+                    BreakLabel::None => {}
+                };
                 let mut engine = SimSearch::new();
                 let players = finder.find_all().unwrap();
-                info!("Attempting to find player: {}", player_name);
+                info!("Attempting to find player: {}", config.player_name);
                 info!(
                     "Available players: {:?}",
                     players
@@ -92,7 +72,7 @@ pub fn serve(
                     finder.find_by_name(
                         unwarp_or_continue!(
                             engine.search(
-                                player_name.as_str()
+                                config.player_name.as_str()
                             )
                             .get(0).ok_or("No player"), 'player)), 'player);
                 info!("Selected player: {}", player.bus_name_player_name_part());
@@ -101,14 +81,14 @@ pub fn serve(
                     "Playing song: {}",
                     unwarp_or_continue!(metadata.title().ok_or("Song doesn't have a title"), 'player)
                 );
-                let lrc = if player_name == "feeluown" {
+                let lrc = if config.player_name == "feeluown" {
                     if let Some(content) = FuoClient.lyric() {
                         Lyric::from_str(&content)
                     } else {
                         Lyric::from_str("")
                     }
                 } else {
-                    find_lyric(&metadata, &config.lyric_dir, fuzzy)
+                    find_lyric(&metadata, &config.lyric_dir, config.fuzzy)
                 };
                 //dbg!(&lrc);
                 let mut count = 0;
@@ -126,22 +106,12 @@ pub fn serve(
                         count = 0;
                     }
                     if count > 10 {
-                        if let Some(event) = event_receiver.try_recv().ok() {
-                            match event {
-                                Event::Stop => {
-                                    break 'dbus;
-                                }
-                                Event::ChangePlayer(name) => {
-                                    info!("Received new player name: {}", name);
-                                    player_name = name;
-                                    break 'player;
-                                }
-                                Event::ToggleFuzzy => {
-                                    fuzzy = !fuzzy;
-                                    break 'player;
-                                }
+                        match handle_event(&event_receiver, &mut config) {
+                            BreakLabel::Player => {
+                                break 'player;
                             }
-                        }
+                            BreakLabel::None => {}
+                        };
 
                         position = unwarp_or_continue!(player.get_position(), 'player);
                         instant = Instant::now();
@@ -213,13 +183,35 @@ fn find_lyric(metadata: &Metadata, lyric_dir: &str, fuzzy: bool) -> Lyric {
                 artist = _artist.to_owned().to_owned()
             }
         }
-        let resp = Err("fetch lyric not implemented");
+        let resp = find_lyric_online(title, artist.as_str());
         match resp {
-            Ok(lyrics) => return Lyric::from_str(lyrics),
+            Ok(lyrics) => return Lyric::from_str(lyrics.as_str()),
             Err(e) => {
                 log::error!("Error: {}", e);
             }
         };
     }
     Lyric::from_str("")
+}
+
+fn handle_event(receiver: &Receiver<Event>, config: &mut Config) -> BreakLabel {
+    use BreakLabel::*;
+    if let Some(event) = receiver.try_recv().ok() {
+        match event {
+            Event::ChangePlayer(name) => {
+                info!("Received new player name: {}", name);
+                config.player_name = name;
+                return Player;
+            }
+            Event::ToggleFuzzy => {
+                config.fuzzy = !config.fuzzy;
+                return Player;
+            }
+        }
+    }
+    None
+}
+
+fn find_lyric_online(_title: &str, _artist: &str) -> Result<String, &'static str> {
+    Err("Not implemented")
 }
