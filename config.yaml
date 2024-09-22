@@ -4,7 +4,7 @@ background_color: "#00000060"
 text_size: 50
 default_size: !Struct { x: 700.0, y: 10.0 }
 passthrough: false
-lyric_dir: "/home/misaka/Temp/Music/"
+lyric_dir: "~/Music"
 font_path: ""
 player_name: "deadbeef"
 fuzzy: false

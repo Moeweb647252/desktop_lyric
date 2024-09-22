@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use std::sync::mpsc::Receiver;
 use std::{sync::Arc, thread};
 
+use crate::fuo::FuoClient;
 use crate::lyric::Lyric;
 use crate::Config;
 use eframe::egui::mutex::RwLock;
@@ -57,8 +58,32 @@ pub fn serve(
         thread::spawn(move || 'dbus: loop {
             let finder = unwarp_or_continue!(PlayerFinder::new(), 'dbus);
             'player: loop {
+                if let Some(event) = event_receiver.try_recv().ok() {
+                    match event {
+                        Event::Stop => {
+                            break 'dbus;
+                        }
+                        Event::ChangePlayer(name) => {
+                            info!("Received new player name: {}", name);
+                            player_name = name;
+                            break 'player;
+                        }
+                        Event::ToggleFuzzy => {
+                            fuzzy = !fuzzy;
+                            break 'player;
+                        }
+                    }
+                }
                 let mut engine = SimSearch::new();
                 let players = finder.find_all().unwrap();
+                info!("Attempting to find player: {}", player_name);
+                info!(
+                    "Available players: {:?}",
+                    players
+                        .iter()
+                        .map(|v| v.bus_name_player_name_part())
+                        .collect::<Vec<&str>>()
+                );
                 for i in &players {
                     let name = i.bus_name_player_name_part().to_owned();
                     engine.insert(i.identity(), &name);
@@ -76,7 +101,15 @@ pub fn serve(
                     "Playing song: {}",
                     unwarp_or_continue!(metadata.title().ok_or("Song doesn't have a title"), 'player)
                 );
-                let lrc = find_lyric(&metadata, &config.lyric_dir, fuzzy);
+                let lrc = if player_name == "feeluown" {
+                    if let Some(content) = FuoClient.lyric() {
+                        Lyric::from_str(&content)
+                    } else {
+                        Lyric::from_str("")
+                    }
+                } else {
+                    find_lyric(&metadata, &config.lyric_dir, fuzzy)
+                };
                 //dbg!(&lrc);
                 let mut count = 0;
                 let mut position = unwarp_or_continue!(player.get_position(), 'player);
@@ -99,6 +132,7 @@ pub fn serve(
                                     break 'dbus;
                                 }
                                 Event::ChangePlayer(name) => {
+                                    info!("Received new player name: {}", name);
                                     player_name = name;
                                     break 'player;
                                 }
@@ -121,10 +155,6 @@ pub fn serve(
                         .collect::<Vec<String>>();
                     if let Some(line) = line.last() {
                         {
-                            if count % 10 == 0 {
-                                //dbg!(pos);
-                                //dbg!(line);
-                            }
                             if !line.is_empty() {
                                 (*lock.write()) = line.to_owned();
                             }
@@ -140,6 +170,8 @@ pub fn serve(
 }
 
 fn find_lyric(metadata: &Metadata, lyric_dir: &str, fuzzy: bool) -> Lyric {
+    let lyric_dir = lyric_dir.replace("~", dirs::home_dir().unwrap().to_string_lossy().as_str());
+    info!("Searching lyric in: {}", lyric_dir);
     if let Some(url) = metadata.url() {
         let path = PathBuf::from(url.replace("file://", ""));
         if let Some(Some(file_stem)) = path.file_stem().map(|v| v.to_str()) {

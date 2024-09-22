@@ -12,8 +12,9 @@ pub struct LyricLine {
 
 impl Lyric {
     pub fn from_str(lrc: &str) -> Self {
+        let lrc = lrc.replace("&apos;", "'");
         let mut res = Vec::new();
-        let lrc = amll_lyric::lrc::parse_lrc(lrc);
+        let lrc = amll_lyric::lrc::parse_lrc(lrc.as_str());
         for i in lrc {
             res.push(LyricLine {
                 begin: i.start_time,

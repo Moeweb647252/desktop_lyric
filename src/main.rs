@@ -1,7 +1,11 @@
-use std::sync::mpsc::{sync_channel, SyncSender};
+use std::{
+    default,
+    sync::mpsc::{sync_channel, SyncSender},
+};
 #[allow(unused_assignments, dead_code)]
 use std::{fs::read_to_string, str::FromStr, sync::Arc};
 
+use clap::Parser;
 use eframe::egui::{
     self, ecolor::HexColor, mutex::RwLock, CentralPanel, Color32, ComboBox, FontData, Label,
     Margin, RichText, Rounding, Sense, Slider, ViewportBuilder, ViewportCommand, ViewportId,
@@ -10,8 +14,12 @@ use log::{debug, info};
 use mpris::Player;
 use serde::{Deserialize, Serialize};
 use serve::{serve, Event};
+mod fuo;
 mod lyric;
 mod serve;
+
+static DEFAULT_CONFIG: &'static str = include_str!("../config.yaml");
+
 #[derive(Serialize, Deserialize, Clone)]
 struct Vec2 {
     x: f32,
@@ -31,10 +39,39 @@ struct Config {
     fuzzy: bool,
 }
 
+#[derive(clap::Parser)]
+struct Args {
+    #[arg(help = "Config file path", short = 'c')]
+    config: Option<String>,
+}
+
 fn main() -> eframe::Result {
     env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
-    let config: Config =
-        serde_yaml::from_str(read_to_string("./config.yaml").unwrap().as_str()).unwrap();
+    let args = Args::parse();
+    let config: Config = if let Some(path) = args.config {
+        info!("Using config file: {}", path);
+        let content = read_to_string(path).unwrap();
+        serde_yaml::from_str(&content).unwrap()
+    } else {
+        if let Some(home_dir) = dirs::home_dir() {
+            let path = home_dir
+                .join(".config")
+                .join("desktop_lyric")
+                .join("config.yaml");
+            if !path.exists() {
+                std::fs::create_dir_all(&path.parent().unwrap()).unwrap();
+                std::fs::write(path, DEFAULT_CONFIG.as_bytes()).unwrap();
+                info!("Using default config file");
+                serde_yaml::from_str(DEFAULT_CONFIG).unwrap()
+            } else {
+                info!("Using config file: {}", path.to_string_lossy());
+                serde_yaml::from_str(read_to_string(path).unwrap().as_str()).unwrap()
+            }
+        } else {
+            info!("Using default config file");
+            serde_yaml::from_str(DEFAULT_CONFIG).unwrap()
+        }
+    };
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_decorations(false) // Hide the OS-specific "chrome" around the window
