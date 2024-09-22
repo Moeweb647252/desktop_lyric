@@ -6,11 +6,11 @@ use log::info;
 use ui::DesktopLyricApp;
 
 mod config;
+mod font;
 mod fuo;
 mod lyric;
 mod serve;
 mod ui;
-mod utils;
 
 #[derive(clap::Parser)]
 struct Args {
@@ -21,11 +21,11 @@ struct Args {
 fn main() -> eframe::Result {
     env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
     let args = Args::parse();
-    let config = if let Some(path) = args.config {
+    let (config, config_path) = if let Some(path) = args.config {
         info!("Using config file: {}", path);
-        Config::from_file(path.as_str())
+        (Config::from_file(path.as_str()), path.into())
     } else {
         Config::init()
     };
-    DesktopLyricApp::run(config)
+    DesktopLyricApp::run(config, config_path)
 }

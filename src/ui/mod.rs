@@ -1,4 +1,7 @@
-use std::sync::{mpsc::SyncSender, Arc};
+use std::{
+    path::PathBuf,
+    sync::{mpsc::SyncSender, Arc},
+};
 
 use eframe::{
     egui::{self, mutex::RwLock, ViewportId},
@@ -20,6 +23,7 @@ pub struct DesktopLyricApp {
     pub players: Vec<Player>,
     pub event_sender: SyncSender<Event>,
     pub config: Config,
+    pub config_path: PathBuf,
 }
 
 impl App for DesktopLyricApp {

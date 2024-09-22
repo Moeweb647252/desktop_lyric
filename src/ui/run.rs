@@ -1,13 +1,13 @@
-use std::sync::mpsc::sync_channel;
+use std::{path::PathBuf, sync::mpsc::sync_channel};
 
 use eframe::egui::ViewportBuilder;
 
-use crate::{config::Config, serve::serve, utils::setup_custom_fonts};
+use crate::{config::Config, font::setup_custom_fonts, serve::serve};
 
 use super::DesktopLyricApp;
 
 impl DesktopLyricApp {
-    pub fn run(config: Config) -> eframe::Result {
+    pub fn run(config: Config, config_path: PathBuf) -> eframe::Result {
         let options = eframe::NativeOptions {
             viewport: ViewportBuilder::default()
                 .with_decorations(false) // Hide the OS-specific "chrome" around the window
@@ -29,6 +29,7 @@ impl DesktopLyricApp {
                 setup_custom_fonts(&cc.egui_ctx, &config);
                 Ok(Box::new(DesktopLyricApp {
                     config,
+                    config_path,
                     current_lyric: lock,
                     drag_mode: true,
                     settings_viewport_id: None,

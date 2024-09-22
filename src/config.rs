@@ -3,6 +3,7 @@ use log::info;
 use serde::de::Visitor;
 use serde::{Deserialize, Serialize, Serializer};
 use std::fs::read_to_string;
+use std::path::PathBuf;
 use std::str::FromStr;
 
 static DEFAULT_CONFIG: &'static str = include_str!("../config.yaml");
@@ -72,24 +73,38 @@ impl Config {
         serde_yaml::from_str(&content).unwrap()
     }
 
-    pub fn init() -> Self {
+    pub fn init() -> (Self, PathBuf) {
         if let Some(home_dir) = dirs::home_dir() {
             let path = home_dir
                 .join(".config")
                 .join("desktop_lyric")
                 .join("config.yaml");
-            if !path.exists() {
-                std::fs::create_dir_all(&path.parent().unwrap()).unwrap();
-                std::fs::write(path, DEFAULT_CONFIG.as_bytes()).unwrap();
-                info!("Using default config file");
-                serde_yaml::from_str(DEFAULT_CONFIG).unwrap()
-            } else {
-                info!("Using config file: {}", path.to_string_lossy());
-                serde_yaml::from_str(read_to_string(path).unwrap().as_str()).unwrap()
-            }
+            (
+                if !path.exists() {
+                    std::fs::create_dir_all(&path.parent().unwrap()).unwrap();
+                    std::fs::write(&path, DEFAULT_CONFIG.as_bytes()).unwrap();
+                    info!("Using default config file");
+                    serde_yaml::from_str(DEFAULT_CONFIG).unwrap()
+                } else {
+                    info!("Using config file: {}", path.to_string_lossy());
+                    serde_yaml::from_str(read_to_string(&path).unwrap().as_str()).unwrap()
+                },
+                path,
+            )
         } else {
-            info!("Using default config file");
-            serde_yaml::from_str(DEFAULT_CONFIG).unwrap()
+            let path: PathBuf = "./config.yaml".into();
+            (
+                if !path.exists() {
+                    std::fs::create_dir_all(&path.parent().unwrap()).unwrap();
+                    std::fs::write(&path, DEFAULT_CONFIG.as_bytes()).unwrap();
+                    info!("Using default config file");
+                    serde_yaml::from_str(DEFAULT_CONFIG).unwrap()
+                } else {
+                    info!("Using config file: {}", path.to_string_lossy());
+                    serde_yaml::from_str(read_to_string(&path).unwrap().as_str()).unwrap()
+                },
+                path,
+            )
         }
     }
 }

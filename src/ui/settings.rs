@@ -1,7 +1,9 @@
+use std::fs::write;
+
 use eframe::egui::{CentralPanel, ComboBox, Context, Slider, ViewportBuilder, ViewportId};
 use log::info;
 
-use crate::serve::Event;
+use crate::{font::setup_custom_fonts, serve::Event};
 
 use super::DesktopLyricApp;
 
@@ -35,7 +37,7 @@ impl DesktopLyricApp {
                 let mut player_name = self.config.player_name.clone();
                 ui.horizontal(|ui| {
                     ui.label("Player");
-                    ComboBox::from_label("")
+                    ComboBox::from_id_source("player_combo_box")
                         .selected_text(&self.config.player_name)
                         .show_ui(ui, |ui| {
                             for player in self.players.iter() {
@@ -63,6 +65,31 @@ impl DesktopLyricApp {
                         .changed()
                         .then(|| self.event_sender.send(Event::ToggleFuzzy).ok());
                 });
+                let mut font_name = self.config.font_name.clone().unwrap_or("".to_owned());
+                ui.horizontal(|ui| {
+                    ui.label("Font");
+                    ComboBox::from_id_source("font_combo_box")
+                        .selected_text(&self.config.font_name.clone().unwrap_or("".to_owned()))
+                        .show_ui(ui, |ui| {
+                            for font in font_loader::system_fonts::query_all() {
+                                ui.selectable_value(&mut font_name, font.clone(), font.as_str());
+                            }
+                        });
+                });
+                if let Some(config_font_name) = &self.config.font_name {
+                    if font_name != config_font_name.as_str() {
+                        info!("Font changed to {}", font_name);
+                        self.config.font_name = Some(font_name.clone());
+                        setup_custom_fonts(ctx, &self.config);
+                    }
+                } else {
+                    self.config.font_name = Some(font_name.clone());
+                }
+                if ui.button("Save").clicked() {
+                    if let Ok(data) = serde_yaml::to_string(&self.config) {
+                        write(&self.config_path, data.as_bytes()).ok();
+                    }
+                }
             });
         });
     }

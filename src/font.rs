@@ -9,7 +9,8 @@ fn load_font(config: &Config) -> Option<FontData> {
             // .ttf and .otf files supported.
             return Some(FontData::from_owned(font_data));
         }
-    } else if let Some(font_name) = config.font_name.clone() {
+    }
+    if let Some(font_name) = config.font_name.clone() {
         if let Some(font) = font_loader::system_fonts::get(
             &FontPropertyBuilder::new()
                 .family(font_name.as_str())
@@ -17,14 +18,13 @@ fn load_font(config: &Config) -> Option<FontData> {
         ) {
             return Some(FontData::from_owned(font.0));
         }
-    } else {
-        if let Some(font) = font_loader::system_fonts::get(&FontPropertyBuilder::new().build()) {
-            return Some(FontData::from_owned(font.0));
-        } else {
-            return None;
-        }
     }
-    None
+
+    if let Some(font) = font_loader::system_fonts::get(&FontPropertyBuilder::new().build()) {
+        return Some(FontData::from_owned(font.0));
+    } else {
+        return None;
+    }
 }
 
 pub fn setup_custom_fonts(ctx: &egui::Context, config: &Config) {
