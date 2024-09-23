@@ -49,6 +49,8 @@ impl DesktopLyricApp {
                         "Container size: {:?}, Screen size: {:?}",
                         resp.rect.max, screen_rect
                     );
+                    self.config.default_size.x = resp.rect.max.x + 20.0;
+                    self.config.default_size.y = resp.rect.max.y + 10.0;
                     ctx.send_viewport_cmd(ViewportCommand::InnerSize(Vec2::new(
                         resp.rect.max.x + 20.0,
                         resp.rect.max.y + 10.0,
