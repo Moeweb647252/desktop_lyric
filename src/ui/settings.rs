@@ -85,6 +85,10 @@ impl DesktopLyricApp {
                 } else {
                     self.config.font_name = Some(font_name.clone());
                 }
+                ui.horizontal(|ui| {
+                    ui.label("Auto resize");
+                    ui.checkbox(&mut self.config.auto_resize, "")
+                });
                 if ui.button("Save").clicked() {
                     if let Ok(data) = serde_yaml::to_string(&self.config) {
                         write(&self.config_path, data.as_bytes()).ok();

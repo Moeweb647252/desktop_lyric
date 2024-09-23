@@ -65,6 +65,7 @@ pub struct Config {
     pub font_name: Option<String>,
     pub player_name: String,
     pub fuzzy: bool,
+    pub auto_resize: bool,
 }
 
 impl Config {

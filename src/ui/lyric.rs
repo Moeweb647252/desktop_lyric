@@ -17,17 +17,33 @@ impl DesktopLyricApp {
             })
             .show(ctx, |ui| {
                 let cur_lyric = { self.current_lyric.read().clone() };
-                let resp = ui.add(
-                    Label::new(
-                        RichText::new(format!("{}", &cur_lyric))
-                            .color(self.config.text_color.color())
-                            .size(self.config.text_size),
+                let resp = if self.config.auto_resize {
+                    ui.add(
+                        Label::new(
+                            RichText::new(format!("{}", &cur_lyric))
+                                .color(self.config.text_color.color())
+                                .size(self.config.text_size),
+                        )
+                        .extend(),
                     )
-                    .extend(),
-                );
+                } else {
+                    ui.centered_and_justified(|ui| {
+                        ui.add(
+                            Label::new(
+                                RichText::new(format!("{}", &cur_lyric))
+                                    .color(self.config.text_color.color())
+                                    .size(self.config.text_size),
+                            )
+                            .extend(),
+                        )
+                    })
+                    .inner
+                };
+
                 let screen_rect = ctx.input(|v| v.screen_rect().max);
                 if (resp.rect.max.x, resp.rect.max.y)
                     != (screen_rect.x.round() - 20.0, screen_rect.y.round() - 10.0)
+                    && self.config.auto_resize
                 {
                     debug!(
                         "Container size: {:?}, Screen size: {:?}",
@@ -51,11 +67,20 @@ impl DesktopLyricApp {
                 ctx.send_viewport_cmd(ViewportCommand::StartDrag);
             }
         } else {
-            if resp.dragged() {
-                if resp.drag_delta().y > 0.0 {
-                    self.config.text_size += 1.0;
-                } else if resp.drag_delta().y < 0.0 {
-                    self.config.text_size -= 1.0;
+            if self.config.auto_resize {
+                if resp.dragged() {
+                    if resp.drag_delta().y > 0.0 {
+                        self.config.text_size += 1.0;
+                    } else if resp.drag_delta().y < 0.0 {
+                        self.config.text_size -= 1.0;
+                    }
+                }
+            } else {
+                if resp.drag_started() {
+                    info!("Begin resize");
+                    ctx.send_viewport_cmd(ViewportCommand::BeginResize(
+                        eframe::egui::ResizeDirection::SouthEast,
+                    ));
                 }
             }
         }
