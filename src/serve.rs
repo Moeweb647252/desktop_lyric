@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use std::sync::mpsc::Receiver;
 use std::{sync::Arc, thread};
 
+use crate::fetch::fetch_spotify_lyric;
 use crate::fuo::FuoClient;
 use crate::lyric::Lyric;
 use crate::Config;
@@ -81,12 +82,22 @@ pub fn serve(
                     "Playing song: {}",
                     unwarp_or_continue!(metadata.title().ok_or("Song doesn't have a title"), 'player)
                 );
+                error!("{}", config.player_name);
                 let lrc = if config.player_name == "feeluown" {
                     if let Some(content) = FuoClient.lyric() {
                         Lyric::from_str(&content)
                     } else {
                         Lyric::from_str("")
                     }
+                } else if config.player_name == "spotify"
+                    && config.spotify_access_token.is_some()
+                    && config.spotify_client_token.is_some()
+                {
+                    fetch_spotify_lyric(
+                        config.spotify_access_token.as_ref().unwrap(),
+                        config.spotify_client_token.as_ref().unwrap(),
+                    )
+                    .unwrap_or(Lyric::from_str(""))
                 } else {
                     find_lyric(&metadata, &config.lyric_dir, config.fuzzy)
                 };

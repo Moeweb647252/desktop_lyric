@@ -66,6 +66,8 @@ pub struct Config {
     pub player_name: String,
     pub fuzzy: bool,
     pub auto_resize: bool,
+    pub spotify_access_token: Option<String>,
+    pub spotify_client_token: Option<String>,
 }
 
 impl Config {

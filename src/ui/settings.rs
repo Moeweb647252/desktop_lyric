@@ -89,6 +89,26 @@ impl DesktopLyricApp {
                     ui.label("Auto resize");
                     ui.checkbox(&mut self.config.auto_resize, "")
                 });
+                ui.horizontal(|ui| {
+                    ui.label("Spotify access token");
+                    let mut buf = self
+                        .config
+                        .spotify_access_token
+                        .clone()
+                        .unwrap_or("".to_string());
+                    ui.text_edit_singleline(&mut buf);
+                    self.config.spotify_access_token = Some(buf);
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Spotify client token");
+                    let mut buf = self
+                        .config
+                        .spotify_client_token
+                        .clone()
+                        .unwrap_or("".to_string());
+                    ui.text_edit_singleline(&mut buf);
+                    self.config.spotify_client_token = Some(buf);
+                });
                 if ui.button("Save").clicked() {
                     if let Ok(data) = serde_yaml::to_string(&self.config) {
                         write(&self.config_path, data.as_bytes()).ok();

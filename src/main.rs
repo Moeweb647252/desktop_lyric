@@ -6,6 +6,7 @@ use log::info;
 use ui::DesktopLyricApp;
 
 mod config;
+mod fetch;
 mod font;
 mod fuo;
 mod lyric;

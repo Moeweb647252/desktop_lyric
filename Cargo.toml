@@ -18,8 +18,10 @@ font-loader = "0.11.0"
 log = "0.4.22"
 mpris = "2.0.1"
 serde = { version = "1.0.210", features = ["derive"] }
+serde_json = "1.0.128"
 serde_yaml = "0.9.34"
 simsearch = "0.2.5"
+ureq = "2.10.1"
 
 [profile.release]
 strip = true
