@@ -10,7 +10,7 @@ use crate::lyric::Lyric;
 use crate::Config;
 use eframe::egui::mutex::RwLock;
 use eframe::egui::TextBuffer;
-use log::{error, info};
+use log::{debug, error, info};
 use mpris::{Metadata, PlayerFinder};
 use simsearch::SimSearch;
 use std::thread::{sleep, JoinHandle};
@@ -78,6 +78,7 @@ pub fn serve(
                             .get(0).ok_or("No player"), 'player)), 'player);
                 info!("Selected player: {}", player.bus_name_player_name_part());
                 let metadata = unwarp_or_continue!(player.get_metadata(), 'player);
+                debug!("Metadata: {:?}", metadata);
                 info!(
                     "Playing song: {}",
                     unwarp_or_continue!(metadata.title().ok_or("Song doesn't have a title"), 'player)
@@ -92,12 +93,19 @@ pub fn serve(
                 } else if config.player_name == "spotify"
                     && config.spotify_access_token.is_some()
                     && config.spotify_client_token.is_some()
+                    && metadata.track_id().is_some()
                 {
-                    fetch_spotify_lyric(
-                        config.spotify_access_token.as_ref().unwrap(),
-                        config.spotify_client_token.as_ref().unwrap(),
-                    )
-                    .unwrap_or(Lyric::from_str(""))
+                    let trackid = metadata.track_id().unwrap().to_string();
+                    if trackid.contains("/com/spotify/track/") {
+                        fetch_spotify_lyric(
+                            config.spotify_access_token.as_ref().unwrap(),
+                            config.spotify_client_token.as_ref().unwrap(),
+                            Some(trackid.split('/').last().unwrap().to_string()),
+                        )
+                        .unwrap_or(Lyric::from_str(""))
+                    } else {
+                        Lyric::from_str("")
+                    }
                 } else {
                     find_lyric(&metadata, &config.lyric_dir, config.fuzzy)
                 };
