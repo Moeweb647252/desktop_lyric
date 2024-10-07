@@ -1,9 +1,23 @@
+use std::time::{Duration, SystemTime};
+
+use log::debug;
 use serde_json::Value;
 
 use crate::lyric::{Lyric, LyricLine};
 
+struct ClientToken {
+    expire: Duration,
+    fetch_time: SystemTime,
+    token: String,
+}
+
 pub fn fetch_spotify_lyric(token: &str, client_token: &str, id: Option<String>) -> Option<Lyric> {
-    let id = id.unwrap_or(fetch_spotify_cur_trackid(token)?);
+    debug!("track id: {:?}", id);
+    let id = if let Some(id) = id {
+        id
+    } else {
+        fetch_spotify_cur_trackid(token)?
+    };
     if let Value::Object(obj) = serde_json::from_str(ureq::get(
         format!("https://spclient.wg.spotify.com/color-lyrics/v2/track/{}?format=json&vocalRemoval=false&market=from_token", id)
         .as_str())
@@ -40,6 +54,23 @@ pub fn fetch_spotify_cur_trackid(token: &str) -> Option<String> {
             if let Value::String(id) = item.get("id")? {
                 return Some(id.to_owned());
             }
+        }
+    }
+    None
+}
+
+pub fn fetch_spotify_client_token() -> Option<String> {
+    if let Value::Object(obj) = serde_json::from_str(
+        &ureq::get("https://clienttoken.spotify.com/v1/clienttoken")
+            .send_string(include_str!("../assets/client.json"))
+            .ok()?
+            .into_string()
+            .ok()?,
+    )
+    .ok()?
+    {
+        if let Value::String(token) = obj.get("accessToken")? {
+            return Some(token.to_owned());
         }
     }
     None

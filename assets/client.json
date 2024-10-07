@@ -1,0 +1,14 @@
+{
+  "client_data": {
+    "client_version": "1.2.49.42.ga0ca8264",
+    "client_id": "d8a5ed958d274c2e8ee717e6a4b0971d",
+    "js_sdk_data": {
+      "device_brand": "unknown",
+      "device_model": "unknown",
+      "os": "linux",
+      "os_version": "unknown",
+      "device_id": "068ac6154bee2d166678cc115829e740",
+      "device_type": "computer"
+    }
+  }
+}

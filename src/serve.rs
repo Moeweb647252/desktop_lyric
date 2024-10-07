@@ -4,9 +4,9 @@ use std::path::PathBuf;
 use std::sync::mpsc::Receiver;
 use std::{sync::Arc, thread};
 
-use crate::fetch::fetch_spotify_lyric;
 use crate::fuo::FuoClient;
 use crate::lyric::Lyric;
+use crate::spotify::fetch_spotify_lyric;
 use crate::Config;
 use eframe::egui::mutex::RwLock;
 use eframe::egui::TextBuffer;
@@ -97,10 +97,12 @@ pub fn serve(
                 {
                     let trackid = metadata.track_id().unwrap().to_string();
                     if trackid.contains("/com/spotify/track/") {
+                        let trackid = trackid.split('/').last().unwrap().to_string();
+                        debug!("Trackid: {}", trackid);
                         fetch_spotify_lyric(
                             config.spotify_access_token.as_ref().unwrap(),
                             config.spotify_client_token.as_ref().unwrap(),
-                            Some(trackid.split('/').last().unwrap().to_string()),
+                            Some(trackid),
                         )
                         .unwrap_or(Lyric::from_str(""))
                     } else {
@@ -146,6 +148,8 @@ pub fn serve(
                         {
                             if !line.is_empty() {
                                 (*lock.write()) = line.to_owned();
+                            } else {
+                                (*lock.write()) = "No Lyric".to_owned();
                             }
                         }
                     }
