@@ -6,7 +6,6 @@ use std::fs::read_to_string;
 use std::path::PathBuf;
 use std::str::FromStr;
 
-static DEFAULT_CONFIG: &'static str = include_str!("../config.yaml");
 struct HexColorVisitor;
 
 impl Visitor<'_> for HexColorVisitor {
@@ -46,6 +45,7 @@ pub struct Vec2 {
 }
 
 #[derive(Serialize, Deserialize, Clone)]
+#[serde(default)]
 pub struct Config {
     #[serde(
         serialize_with = "serialize_hex_color",
@@ -77,37 +77,45 @@ impl Config {
     }
 
     pub fn init() -> (Self, PathBuf) {
-        if let Some(home_dir) = dirs::home_dir() {
-            let path = home_dir
-                .join(".config")
-                .join("desktop_lyric")
-                .join("config.yaml");
-            (
-                if !path.exists() {
-                    std::fs::create_dir_all(&path.parent().unwrap()).unwrap();
-                    std::fs::write(&path, DEFAULT_CONFIG.as_bytes()).unwrap();
-                    info!("Using default config file");
-                    serde_yaml::from_str(DEFAULT_CONFIG).unwrap()
-                } else {
-                    info!("Using config file: {}", path.to_string_lossy());
-                    serde_yaml::from_str(read_to_string(&path).unwrap().as_str()).unwrap()
-                },
-                path,
-            )
+        let path = dirs::config_dir()
+            .map(|c| c.join("desktop_lyric").join("config.yaml"))
+            .unwrap_or(PathBuf::from("./config.yaml"));
+
+        let config;
+
+        if let Some(_config) = read_to_string(&path)
+            .ok()
+            .and_then(|s| serde_yaml::from_str::<'_, Config>(&*s).ok())
+        {
+            info!("Using config file: {}", path.to_string_lossy());
+            config = _config;
         } else {
-            let path: PathBuf = "./config.yaml".into();
-            (
-                if !path.exists() {
-                    std::fs::create_dir_all(&path.parent().unwrap()).unwrap();
-                    std::fs::write(&path, DEFAULT_CONFIG.as_bytes()).unwrap();
-                    info!("Using default config file");
-                    serde_yaml::from_str(DEFAULT_CONFIG).unwrap()
-                } else {
-                    info!("Using config file: {}", path.to_string_lossy());
-                    serde_yaml::from_str(read_to_string(&path).unwrap().as_str()).unwrap()
-                },
-                path,
-            )
+            info!("Falling back to default config");
+            config = Config::default();
+        }
+
+        std::fs::create_dir_all(&path.parent().unwrap()).unwrap();
+        let _ = std::fs::write(&path, serde_yaml::to_string(&config).unwrap().as_str());
+        (config, path)
+    }
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            text_color: HexColor::from_str("#ffffff60").unwrap(),
+            background_color: HexColor::from_str("#00000060").unwrap(),
+            text_size: 50.,
+            default_size: Vec2 { x: 700., y: 10. },
+            passthrough: false,
+            lyric_dir: "~/Music".into(),
+            font_path: Some("".into()),
+            player_name: "deadbeef".into(),
+            fuzzy: false,
+            auto_resize: false,
+            font_name: None,
+            spotify_access_token: None,
+            spotify_client_token: None,
         }
     }
 }
